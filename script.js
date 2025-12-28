@@ -324,6 +324,36 @@ function hideVideoPreview() {
 }
 
 // ========================================
+// Theme Management
+// ========================================
+
+/**
+ * Initialize theme based on system preference
+ */
+function initializeTheme() {
+    // Get system preference
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setTheme(prefersDark ? 'dark' : 'light');
+
+    // Listen for system theme changes and update in real-time
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        setTheme(e.matches ? 'dark' : 'light');
+    });
+}
+
+/**
+ * Set theme
+ * @param {string} theme - 'light' or 'dark'
+ */
+function setTheme(theme) {
+    if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+    }
+}
+
+// ========================================
 // Additional Animations
 // ========================================
 
@@ -344,5 +374,8 @@ document.head.appendChild(style);
 // ========================================
 // Initialize
 // ========================================
+
+// Initialize theme
+initializeTheme();
 
 console.log('Twitter Video Downloader initialized');
