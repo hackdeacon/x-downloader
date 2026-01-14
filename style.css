@@ -10,6 +10,7 @@
 html {
     overflow-x: hidden;
     width: 100%;
+    scroll-behavior: smooth;
 }
 
 :root {
@@ -46,6 +47,18 @@ html {
     transform: none !important;
 }
 
+/* 减少不必要的动画以提升性能 */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 /* Dark mode colors */
 [data-theme="dark"] {
     --primary: #1d9bf0;
@@ -78,6 +91,7 @@ body {
     overflow-x: hidden;
     width: 100%;
     position: relative;
+    will-change: auto;
 }
 
 /* Theme transition - only enabled after page load */
@@ -184,11 +198,8 @@ body.animations-enabled {
     border-color: var(--primary-light);
 }
 
-.url-input:focus,
-.url-input:focus-visible {
+.url-input:focus {
     border-color: var(--primary);
-    outline: none;
-    border-radius: var(--radius);
 }
 
 .download-btn {
@@ -207,7 +218,6 @@ body.animations-enabled {
 
 .download-btn:hover {
     background: var(--primary-dark);
-    /* box-shadow: 0 2px 8px rgba(29, 155, 240, 0.15); */
 }
 
 .download-btn:active {
@@ -456,28 +466,26 @@ body.animations-enabled {
 .heart {
     color: #e74c3c;
     display: inline-block;
-    animation: heartbeat 1.8s ease-in-out infinite;
+}
+
+/* 只在用户悬停时启用心跳动画，减少持续动画 */
+.footer:hover .heart {
+    animation: heartbeat 1.8s ease-in-out 1;
 }
 
 @keyframes heartbeat {
-
-    0%,
-    100% {
+    0%, 100% {
         transform: scale(1);
     }
-
     15% {
         transform: scale(1.15);
     }
-
     30% {
         transform: scale(1);
     }
-
     45% {
         transform: scale(1.1);
     }
-
     60% {
         transform: scale(1);
     }
@@ -529,17 +537,28 @@ body.animations-enabled {
     display: none !important;
 }
 
-/* Expand animation for input section */
-.expand-enter {
-    max-height: 500px;
-    opacity: 1;
-    overflow: hidden;
+/* Success Toast - 使用 CSS 类而非内联样式 */
+.success-toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--success);
+    color: white;
+    padding: 1rem 1.75rem;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 186, 124, 0.3);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    z-index: 1000;
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform, opacity;
 }
 
-.expand-exit {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
+.success-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
 }
 
 /* ========================================
@@ -668,11 +687,6 @@ body.animations-enabled {
 
 .video-preview:not(.hidden) {
     animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Smooth scroll behavior */
-html {
-    scroll-behavior: smooth;
 }
 
 /* Selection color */

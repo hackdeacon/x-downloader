@@ -10,13 +10,12 @@ const videoPreview = document.getElementById('videoPreview');
 const previewVideo = document.getElementById('previewVideo');
 const videoTitle = document.getElementById('videoTitle');
 const videoAuthor = document.getElementById('videoAuthor');
-const videoDuration = document.getElementById('videoDuration');
 const qualityButtons = document.getElementById('qualityButtons');
 
 // ========================================
 // State Management
 // ========================================
-let currentVideoData = null;
+let inputDebounceTimer = null;
 
 // ========================================
 // Event Listeners
@@ -28,8 +27,12 @@ urlInput.addEventListener('keypress', (e) => {
     }
 });
 
+// 使用防抖优化输入事件处理
 urlInput.addEventListener('input', () => {
-    hideError();
+    clearTimeout(inputDebounceTimer);
+    inputDebounceTimer = setTimeout(() => {
+        hideError();
+    }, 150);
 });
 
 // ========================================
@@ -66,9 +69,6 @@ async function handleDownload() {
             throw new Error('Unable to fetch video information');
         }
 
-        // Store current video data
-        currentVideoData = videoData;
-
         // Display video preview
         displayVideoPreview(videoData);
 
@@ -82,8 +82,6 @@ async function handleDownload() {
 
 /**
  * Validate Twitter URL
- * @param {string} url - URL to validate
- * @returns {boolean}
  */
 function isValidTwitterUrl(url) {
     const twitterPattern = /^https?:\/\/(www\.)?(twitter\.com|x\.com)\/\w+\/status\/\d+/i;
@@ -91,55 +89,44 @@ function isValidTwitterUrl(url) {
 }
 
 /**
- * Fetch video data from our backend API
- * @param {string} url - Twitter video URL
- * @returns {Promise<Object>} Video data
+ * Fetch video data from backend API
  */
 async function fetchVideoData(url) {
-    try {
-        // Use our own backend API
-        const apiUrl = '/api/video';
+    const response = await fetch('/api/video', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({ url })
+    });
 
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({ url })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to fetch video');
-        }
-
-        const result = await response.json();
-
-        if (!result.success || !result.data) {
-            throw new Error('Invalid response from server');
-        }
-
-        const data = result.data;
-
-        // Format the response for our frontend
-        return {
-            title: data.title || 'Twitter Video',
-            author: data.author || '@TwitterUser',
-            authorName: data.authorName || '',
-            duration: data.duration || '0:00',
-            thumbnail: data.thumbnail || '',
-            qualities: data.qualities.map(q => ({
-                quality: q.quality,
-                size: formatFileSize(q.bitrate),
-                url: q.url,
-                bitrate: q.bitrate
-            }))
-        };
-    } catch (error) {
-        console.error('Backend API error:', error);
-        throw new Error(error.message || 'Unable to fetch video information');
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch video');
     }
+
+    const result = await response.json();
+
+    if (!result.success || !result.data) {
+        throw new Error('Invalid response from server');
+    }
+
+    const data = result.data;
+
+    return {
+        title: data.title || 'Twitter Video',
+        author: data.author || '@TwitterUser',
+        authorName: data.authorName || '',
+        duration: data.duration || '0:00',
+        thumbnail: data.thumbnail || '',
+        qualities: data.qualities.map(q => ({
+            quality: q.quality,
+            size: formatFileSize(q.bitrate),
+            url: q.url,
+            bitrate: q.bitrate
+        }))
+    };
 }
 
 /**
@@ -156,21 +143,7 @@ function formatFileSize(bitrate) {
 }
 
 /**
- * Determine video quality from URL
- * @param {string} url - Video URL
- * @returns {string} Quality label
- */
-function determineQuality(url) {
-    if (url.includes('_full')) return '1080p';
-    if (url.includes('_hd')) return '720p';
-    if (url.includes('_sd')) return '480p';
-    if (url.includes('_low')) return '360p';
-    return 'HD';
-}
-
-/**
  * Display video preview
- * @param {Object} videoData - Video data object
  */
 function displayVideoPreview(videoData) {
     // Set video source through proxy (use highest quality for preview)
@@ -182,14 +155,16 @@ function displayVideoPreview(videoData) {
     videoTitle.textContent = videoData.title;
     videoAuthor.textContent = videoData.author;
 
-    // Generate quality buttons
-    qualityButtons.innerHTML = '';
+    // Generate quality buttons (使用 DocumentFragment 减少重排)
+    const fragment = document.createDocumentFragment();
     videoData.qualities.forEach((quality, index) => {
         const button = createQualityButton(quality);
         // Add staggered animation delay
         button.style.animation = `fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) ${index * 0.05}s both`;
-        qualityButtons.appendChild(button);
+        fragment.appendChild(button);
     });
+    qualityButtons.innerHTML = '';
+    qualityButtons.appendChild(fragment);
 
     // Show preview section with smooth animation
     videoPreview.classList.remove('hidden');
@@ -210,8 +185,6 @@ function displayVideoPreview(videoData) {
 
 /**
  * Create quality button
- * @param {Object} quality - Quality data
- * @returns {HTMLButtonElement}
  */
 function createQualityButton(quality) {
     const button = document.createElement('button');
@@ -227,75 +200,43 @@ function createQualityButton(quality) {
 
 /**
  * Download video through backend proxy
- * @param {string} url - Video URL
- * @param {string} quality - Video quality
  */
-async function downloadVideo(url, quality) {
-    try {
-        // Show download starting toast
-        showSuccessToast(`Preparing ${quality} download...`);
+function downloadVideo(url, quality) {
+    showSuccessToast(`Preparing ${quality} download...`);
 
-        // Use our backend proxy to download the video
-        const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
+    const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
+    const a = document.createElement('a');
+    a.href = proxyUrl;
+    a.download = `twitter-video-${quality}-${Date.now()}.mp4`;
+    a.target = '_blank';
 
-        // Create a temporary anchor element
-        const a = document.createElement('a');
-        a.href = proxyUrl;
-        a.download = `twitter-video-${quality}-${Date.now()}.mp4`;
-        a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-        // Trigger download
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        // Show success feedback after a short delay
-        setTimeout(() => {
-            showSuccessToast(`${quality} download started`);
-        }, 500);
-
-    } catch (error) {
-        console.error('Download error:', error);
-        showError('Download failed, please try again');
-    }
+    setTimeout(() => {
+        showSuccessToast(`${quality} download started`);
+    }, 500);
 }
 
 /**
  * Show success toast
- * @param {string} message - Success message
  */
 function showSuccessToast(message) {
     const toast = document.createElement('div');
-    toast.style.cssText = `
-        position: fixed;
-        bottom: 2rem;
-        left: 50%;
-        transform: translateX(-50%) translateY(100px);
-        background: var(--success);
-        color: white;
-        padding: 1rem 1.75rem;
-        border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0, 186, 124, 0.3);
-        font-weight: 600;
-        font-size: 0.9375rem;
-        z-index: 1000;
-        opacity: 0;
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    `;
+    toast.className = 'success-toast';
     toast.textContent = message;
 
     document.body.appendChild(toast);
 
-    // Trigger animation
-    requestAnimationFrame(() => {
-        toast.style.opacity = '1';
-        toast.style.transform = 'translateX(-50%) translateY(0)';
-    });
+    // 使用 setTimeout 0 代替 requestAnimationFrame，减少复杂度
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
 
     // Fade out and remove
     setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(-50%) translateY(-20px)';
+        toast.classList.remove('show');
         setTimeout(() => {
             toast.remove();
         }, 400);
@@ -311,39 +252,31 @@ function showSuccessToast(message) {
  */
 function showLoading() {
     loadingSpinner.classList.remove('hidden');
-    loadingSpinner.style.opacity = '0';
-    loadingSpinner.style.transform = 'scale(0.9)';
-    requestAnimationFrame(() => {
-        loadingSpinner.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-        loadingSpinner.style.opacity = '1';
-        loadingSpinner.style.transform = 'scale(1)';
-    });
     downloadBtn.disabled = true;
-    downloadBtn.style.opacity = '0.6';
-    downloadBtn.style.cursor = 'not-allowed';
+
+    // 合并样式操作以减少重排
+    requestAnimationFrame(() => {
+        loadingSpinner.style.cssText = 'opacity: 1; transform: scale(1); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);';
+        downloadBtn.style.cssText = 'opacity: 0.6; cursor: not-allowed;';
+    });
 }
 
 /**
  * Hide loading spinner
  */
 function hideLoading() {
-    loadingSpinner.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-    loadingSpinner.style.opacity = '0';
-    loadingSpinner.style.transform = 'scale(0.9)';
+    loadingSpinner.style.cssText = 'opacity: 0; transform: scale(0.9); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);';
+    downloadBtn.style.cssText = 'opacity: 1; cursor: pointer;';
+    downloadBtn.disabled = false;
+
     setTimeout(() => {
         loadingSpinner.classList.add('hidden');
-        loadingSpinner.style.transform = '';
-        loadingSpinner.style.opacity = '';
-        loadingSpinner.style.transition = '';
+        loadingSpinner.style.cssText = '';
     }, 300);
-    downloadBtn.disabled = false;
-    downloadBtn.style.opacity = '1';
-    downloadBtn.style.cursor = 'pointer';
 }
 
 /**
  * Show error message
- * @param {string} message - Error message
  */
 function showError(message) {
     errorText.textContent = message;
@@ -390,35 +323,9 @@ function initializeTheme() {
     });
 }
 
-/**
- * Set theme
- * @param {string} theme - 'light' or 'dark'
- */
 function setTheme(theme) {
-    if (theme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-        document.documentElement.setAttribute('data-theme', 'light');
-    }
+    document.documentElement.setAttribute('data-theme', theme);
 }
-
-// ========================================
-// Additional Animations
-// ========================================
-
-// Add fadeOut animation
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes fadeOut {
-        from {
-            opacity: 1;
-        }
-        to {
-            opacity: 0;
-        }
-    }
-`;
-document.head.appendChild(style);
 
 // ========================================
 // Initialize
@@ -432,7 +339,7 @@ function enableAnimations() {
     document.body.classList.remove('no-animations');
     document.body.classList.add('animations-enabled');
 
-    // 手动触发动画，避免初始渲染时的抖动
+    // 简化动画触发，避免过多的 DOM 查询
     const logo = document.querySelector('.logo');
     const inputSection = document.querySelector('.input-section');
 
@@ -447,13 +354,11 @@ function enableAnimations() {
 // Initialize theme
 initializeTheme();
 
-// Enable animations after DOM is ready (next frame to ensure CSS is applied)
+// Enable animations after DOM is ready (简化逻辑)
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        requestAnimationFrame(enableAnimations);
-    });
+    document.addEventListener('DOMContentLoaded', enableAnimations);
 } else {
-    requestAnimationFrame(enableAnimations);
+    enableAnimations();
 }
 
 console.log('Twitter Demo initialized');
