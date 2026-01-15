@@ -1,7 +1,9 @@
 /* ========================================
    Reset & Base Styles
    ======================================== */
-* {
+*,
+*::before,
+*::after {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -14,6 +16,7 @@ html {
 }
 
 :root {
+    /* Colors */
     --primary: #1d9bf0;
     --primary-dark: #1a8cd8;
     --primary-light: #8ecdf8;
@@ -23,23 +26,42 @@ html {
     --bg-secondary: #f7f9f9;
     --border: #eff3f4;
     --error: #f4212e;
+    --error-bg: #fff1f2;
+    --error-border: #ffe4e6;
     --success: #00ba7c;
+
+    /* Shadows */
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
     --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.12);
+
+    /* Border Radius */
     --radius-sm: 6px;
     --radius: 10px;
     --radius-lg: 14px;
+
+    /* Transitions */
     --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    --error-bg: #fff1f2;
-    --error-border: #ffe4e6;
+}
+
+/* Dark mode */
+[data-theme="dark"] {
+    --text: #e7e9ea;
+    --text-light: #8b98a5;
+    --bg: #000000;
+    --bg-secondary: #0a0a0a;
+    --border: #2f3336;
+    --shadow: 0 1px 3px rgba(255, 255, 255, 0.05);
+    --shadow-md: 0 2px 8px rgba(255, 255, 255, 0.08);
+    --shadow-lg: 0 8px 16px rgba(255, 255, 255, 0.1);
+    --error-bg: #200a0a;
+    --error-border: #3a1515;
 }
 
 /* ========================================
-   Initial Load Animation Prevention
+   Animation Prevention
    ======================================== */
-/* 初始加载时禁用动画，加载完成后通过 JS 移除此类 */
 .no-animations .logo,
 .no-animations .input-section {
     animation: none !important;
@@ -47,7 +69,6 @@ html {
     transform: none !important;
 }
 
-/* 减少不必要的动画以提升性能 */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -57,25 +78,6 @@ html {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
-}
-
-/* Dark mode colors */
-[data-theme="dark"] {
-    --primary: #1d9bf0;
-    --primary-dark: #1a8cd8;
-    --primary-light: #8ecdf8;
-    --text: #e7e9ea;
-    --text-light: #8b98a5;
-    --bg: #000000;
-    --bg-secondary: #0a0a0a;
-    --border: #2f3336;
-    --error: #f4212e;
-    --success: #00ba7c;
-    --shadow: 0 1px 3px rgba(255, 255, 255, 0.05);
-    --shadow-md: 0 2px 8px rgba(255, 255, 255, 0.08);
-    --shadow-lg: 0 8px 16px rgba(255, 255, 255, 0.1);
-    --error-bg: #200a0a;
-    --error-border: #3a1515;
 }
 
 body {
@@ -90,11 +92,8 @@ body {
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
     width: 100%;
-    position: relative;
-    will-change: auto;
 }
 
-/* Theme transition - only enabled after page load */
 body.animations-enabled {
     transition: background-color var(--transition-slow), color var(--transition);
 }

@@ -1,38 +1,41 @@
 // ========================================
 // DOM Elements
 // ========================================
-const urlInput = document.getElementById('twitterUrl');
-const downloadBtn = document.getElementById('downloadBtn');
-const loadingSpinner = document.getElementById('loadingSpinner');
-const errorMessage = document.getElementById('errorMessage');
-const errorText = document.getElementById('errorText');
-const videoPreview = document.getElementById('videoPreview');
-const previewVideo = document.getElementById('previewVideo');
-const videoTitle = document.getElementById('videoTitle');
-const videoAuthor = document.getElementById('videoAuthor');
-const qualityButtons = document.getElementById('qualityButtons');
+const elements = {
+    urlInput: document.getElementById('twitterUrl'),
+    downloadBtn: document.getElementById('downloadBtn'),
+    loadingSpinner: document.getElementById('loadingSpinner'),
+    errorMessage: document.getElementById('errorMessage'),
+    errorText: document.getElementById('errorText'),
+    videoPreview: document.getElementById('videoPreview'),
+    previewVideo: document.getElementById('previewVideo'),
+    videoTitle: document.getElementById('videoTitle'),
+    videoAuthor: document.getElementById('videoAuthor'),
+    qualityButtons: document.getElementById('qualityButtons')
+};
 
 // ========================================
-// State Management
+// Constants
 // ========================================
-let inputDebounceTimer = null;
+const TWITTER_URL_PATTERN = /^https?:\/\/(www\.)?(twitter\.com|x\.com)\/\w+\/status\/\d+/i;
+const ANIMATION_TIMING = 'cubic-bezier(0.4, 0, 0.2, 1)';
+const DEBOUNCE_DELAY = 150;
+
+// ========================================
+// State
+// ========================================
+let debounceTimer = null;
 
 // ========================================
 // Event Listeners
 // ========================================
-downloadBtn.addEventListener('click', handleDownload);
-urlInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        handleDownload();
-    }
+elements.downloadBtn.addEventListener('click', handleDownload);
+elements.urlInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleDownload();
 });
-
-// 使用防抖优化输入事件处理
-urlInput.addEventListener('input', () => {
-    clearTimeout(inputDebounceTimer);
-    inputDebounceTimer = setTimeout(() => {
-        hideError();
-    }, 150);
+elements.urlInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(hideError, DEBOUNCE_DELAY);
 });
 
 // ========================================
@@ -43,35 +46,28 @@ urlInput.addEventListener('input', () => {
  * Handle download button click
  */
 async function handleDownload() {
-    const url = urlInput.value.trim();
+    const url = elements.urlInput.value.trim();
 
-    // Validate URL
     if (!url) {
         showError('Please enter a Twitter video URL');
         return;
     }
 
-    if (!isValidTwitterUrl(url)) {
+    if (!TWITTER_URL_PATTERN.test(url)) {
         showError('Please enter a valid Twitter video URL');
         return;
     }
 
-    // Show loading state
     showLoading();
     hideError();
     hideVideoPreview();
 
     try {
-        // Fetch video data
         const videoData = await fetchVideoData(url);
-
         if (!videoData) {
             throw new Error('Unable to fetch video information');
         }
-
-        // Display video preview
         displayVideoPreview(videoData);
-
         hideLoading();
     } catch (error) {
         hideLoading();
@@ -81,23 +77,12 @@ async function handleDownload() {
 }
 
 /**
- * Validate Twitter URL
- */
-function isValidTwitterUrl(url) {
-    const twitterPattern = /^https?:\/\/(www\.)?(twitter\.com|x\.com)\/\w+\/status\/\d+/i;
-    return twitterPattern.test(url);
-}
-
-/**
  * Fetch video data from backend API
  */
 async function fetchVideoData(url) {
     const response = await fetch('/api/video', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({ url })
     });
 
@@ -107,13 +92,11 @@ async function fetchVideoData(url) {
     }
 
     const result = await response.json();
-
     if (!result.success || !result.data) {
         throw new Error('Invalid response from server');
     }
 
     const data = result.data;
-
     return {
         title: data.title || 'Twitter Video',
         author: data.author || '@TwitterUser',
@@ -134,7 +117,6 @@ async function fetchVideoData(url) {
  */
 function formatFileSize(bitrate) {
     if (!bitrate) return 'Unknown';
-    // Rough estimate: bitrate * 10 seconds / 8 bits per byte
     const bytes = (bitrate * 10) / 8;
     if (bytes >= 1000000) {
         return `~${(bytes / 1000000).toFixed(1)} MB/10s`;
@@ -146,40 +128,32 @@ function formatFileSize(bitrate) {
  * Display video preview
  */
 function displayVideoPreview(videoData) {
-    // Set video source through proxy (use highest quality for preview)
     const videoUrl = videoData.qualities[0].url;
-    const proxyUrl = `/api/download?url=${encodeURIComponent(videoUrl)}`;
-    previewVideo.src = proxyUrl;
+    elements.previewVideo.src = `/api/download?url=${encodeURIComponent(videoUrl)}`;
+    elements.videoTitle.textContent = videoData.title;
+    elements.videoAuthor.textContent = videoData.author;
 
-    // Set video metadata
-    videoTitle.textContent = videoData.title;
-    videoAuthor.textContent = videoData.author;
-
-    // Generate quality buttons (使用 DocumentFragment 减少重排)
     const fragment = document.createDocumentFragment();
     videoData.qualities.forEach((quality, index) => {
         const button = createQualityButton(quality);
-        // Add staggered animation delay
-        button.style.animation = `fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) ${index * 0.05}s both`;
+        button.style.animation = `fadeInUp 0.4s ${ANIMATION_TIMING} ${index * 0.05}s both`;
         fragment.appendChild(button);
     });
-    qualityButtons.innerHTML = '';
-    qualityButtons.appendChild(fragment);
+    elements.qualityButtons.innerHTML = '';
+    elements.qualityButtons.appendChild(fragment);
 
-    // Show preview section with smooth animation
-    videoPreview.classList.remove('hidden');
-    videoPreview.style.opacity = '0';
-    videoPreview.style.transform = 'translateY(20px)';
+    elements.videoPreview.classList.remove('hidden');
+    elements.videoPreview.style.opacity = '0';
+    elements.videoPreview.style.transform = 'translateY(20px)';
 
     requestAnimationFrame(() => {
-        videoPreview.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
-        videoPreview.style.opacity = '1';
-        videoPreview.style.transform = 'translateY(0)';
+        elements.videoPreview.style.transition = `all 0.5s ${ANIMATION_TIMING}`;
+        elements.videoPreview.style.opacity = '1';
+        elements.videoPreview.style.transform = 'translateY(0)';
     });
 
-    // Scroll to preview smoothly
     setTimeout(() => {
-        videoPreview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        elements.videoPreview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 200);
 }
 
@@ -190,11 +164,7 @@ function createQualityButton(quality) {
     const button = document.createElement('button');
     button.className = 'quality-btn';
     button.textContent = quality.quality;
-
-    button.addEventListener('click', () => {
-        downloadVideo(quality.url, quality.quality);
-    });
-
+    button.addEventListener('click', () => downloadVideo(quality.url, quality.quality));
     return button;
 }
 
@@ -204,19 +174,15 @@ function createQualityButton(quality) {
 function downloadVideo(url, quality) {
     showSuccessToast(`Preparing ${quality} download...`);
 
-    const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
     const a = document.createElement('a');
-    a.href = proxyUrl;
+    a.href = `/api/download?url=${encodeURIComponent(url)}`;
     a.download = `twitter-video-${quality}-${Date.now()}.mp4`;
     a.target = '_blank';
-
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
 
-    setTimeout(() => {
-        showSuccessToast(`${quality} download started`);
-    }, 500);
+    setTimeout(() => showSuccessToast(`${quality} download started`), 500);
 }
 
 /**
@@ -226,20 +192,12 @@ function showSuccessToast(message) {
     const toast = document.createElement('div');
     toast.className = 'success-toast';
     toast.textContent = message;
-
     document.body.appendChild(toast);
 
-    // 使用 setTimeout 0 代替 requestAnimationFrame，减少复杂度
-    setTimeout(() => {
-        toast.classList.add('show');
-    }, 10);
-
-    // Fade out and remove
+    setTimeout(() => toast.classList.add('show'), 10);
     setTimeout(() => {
         toast.classList.remove('show');
-        setTimeout(() => {
-            toast.remove();
-        }, 400);
+        setTimeout(() => toast.remove(), 400);
     }, 2500);
 }
 
@@ -247,61 +205,41 @@ function showSuccessToast(message) {
 // UI Helper Functions
 // ========================================
 
-/**
- * Show loading spinner
- */
 function showLoading() {
-    loadingSpinner.classList.remove('hidden');
-    downloadBtn.disabled = true;
-
-    // 合并样式操作以减少重排
+    elements.loadingSpinner.classList.remove('hidden');
+    elements.downloadBtn.disabled = true;
     requestAnimationFrame(() => {
-        loadingSpinner.style.cssText = 'opacity: 1; transform: scale(1); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);';
-        downloadBtn.style.cssText = 'opacity: 0.6; cursor: not-allowed;';
+        elements.loadingSpinner.style.cssText = `opacity: 1; transform: scale(1); transition: all 0.3s ${ANIMATION_TIMING};`;
+        elements.downloadBtn.style.cssText = 'opacity: 0.6; cursor: not-allowed;';
     });
 }
 
-/**
- * Hide loading spinner
- */
 function hideLoading() {
-    loadingSpinner.style.cssText = 'opacity: 0; transform: scale(0.9); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);';
-    downloadBtn.style.cssText = 'opacity: 1; cursor: pointer;';
-    downloadBtn.disabled = false;
-
+    elements.loadingSpinner.style.cssText = `opacity: 0; transform: scale(0.9); transition: all 0.3s ${ANIMATION_TIMING};`;
+    elements.downloadBtn.style.cssText = 'opacity: 1; cursor: pointer;';
+    elements.downloadBtn.disabled = false;
     setTimeout(() => {
-        loadingSpinner.classList.add('hidden');
-        loadingSpinner.style.cssText = '';
+        elements.loadingSpinner.classList.add('hidden');
+        elements.loadingSpinner.style.cssText = '';
     }, 300);
 }
 
-/**
- * Show error message
- */
 function showError(message) {
-    errorText.textContent = message;
-    errorMessage.classList.remove('hidden');
+    elements.errorText.textContent = message;
+    elements.errorMessage.classList.remove('hidden');
 }
 
-/**
- * Hide error message
- */
 function hideError() {
-    errorMessage.classList.add('hidden');
+    elements.errorMessage.classList.add('hidden');
 }
 
-/**
- * Hide video preview
- */
 function hideVideoPreview() {
-    videoPreview.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
-    videoPreview.style.opacity = '0';
-    videoPreview.style.transform = 'translateY(20px)';
+    elements.videoPreview.style.transition = `all 0.4s ${ANIMATION_TIMING}`;
+    elements.videoPreview.style.opacity = '0';
+    elements.videoPreview.style.transform = 'translateY(20px)';
     setTimeout(() => {
-        videoPreview.classList.add('hidden');
-        videoPreview.style.opacity = '';
-        videoPreview.style.transform = '';
-        videoPreview.style.transition = '';
+        elements.videoPreview.classList.add('hidden');
+        elements.videoPreview.style.cssText = '';
     }, 400);
 }
 
@@ -309,18 +247,11 @@ function hideVideoPreview() {
 // Theme Management
 // ========================================
 
-/**
- * Initialize theme based on system preference
- */
-function initializeTheme() {
-    // Get system preference
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setTheme(prefersDark ? 'dark' : 'light');
+const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
-    // Listen for system theme changes and update in real-time
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        setTheme(e.matches ? 'dark' : 'light');
-    });
+function initializeTheme() {
+    setTheme(darkModeQuery.matches ? 'dark' : 'light');
+    darkModeQuery.addEventListener('change', (e) => setTheme(e.matches ? 'dark' : 'light'));
 }
 
 function setTheme(theme) {
@@ -331,34 +262,21 @@ function setTheme(theme) {
 // Initialize
 // ========================================
 
-/**
- * Enable animations after initial page load
- * This prevents the initial render from triggering transitions
- */
 function enableAnimations() {
     document.body.classList.remove('no-animations');
     document.body.classList.add('animations-enabled');
 
-    // 简化动画触发，避免过多的 DOM 查询
     const logo = document.querySelector('.logo');
     const inputSection = document.querySelector('.input-section');
 
-    if (logo) {
-        logo.style.animation = 'slideDown 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
-    }
-    if (inputSection) {
-        inputSection.style.animation = 'fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
-    }
+    if (logo) logo.style.animation = `slideDown 0.6s ${ANIMATION_TIMING}`;
+    if (inputSection) inputSection.style.animation = `fadeInUp 0.5s ${ANIMATION_TIMING}`;
 }
 
-// Initialize theme
 initializeTheme();
 
-// Enable animations after DOM is ready (简化逻辑)
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', enableAnimations);
 } else {
     enableAnimations();
 }
-
-console.log('Twitter Demo initialized');
